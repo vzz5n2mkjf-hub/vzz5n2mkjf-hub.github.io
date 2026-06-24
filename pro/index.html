@@ -8,194 +8,175 @@
     <meta name="theme-color" content="#f2f2f7">
     <title>Автоинструктор Pro</title>
     
-    <!-- ========== СИСТЕМА ДОСТУПА ЧЕРЕЗ SUPABASE ========== -->
+    <!-- ========== СИСТЕМА ДОСТУПА (ЛОКАЛЬНАЯ) ========== -->
     <script>
     (function() {
-        // ========== НАСТРОЙКИ ==========
-        const VALIDATE_KEY_URL = 'https://knnmjukotzfhoruvzuvp.supabase.co/functions/v1/validate-key';
+        const MONTHLY_SALTS = [
+            'Xk9mP2vR8wN3bF6cH1A7', 'L4sD7fG9hJ2kL5pQ8rT',
+            'M6nB8vC3xZ9aS4dF7gH', 'P2rT5yU8iE1wQ6oL9kN',
+            'V3cX6zA9sD4fG7hJ2kL', 'B8nM4qW7eR1tY5uI9oP',
+            'C6vF2gH9jK3lP5rT7yU', 'Z9xM4nB7vC3qW8eR1tY',
+            'Q5uI9oP2rT6yU3cX7zA', 'W8eR1tY5uI9oP2rT6yU',
+            'E4gH7jK3lP5rT8yU1oP', 'R2tY6uI9oP3cX7zA5sD'
+        ];
+
         const STORAGE_KEY = 'app_authorized';
         const CODE_KEY = 'app_used_code';
-        const DEVICE_KEY = 'app_device_id';
-        const EXPIRY_KEY = 'app_expiry';
 
-        // === ГЕНЕРАЦИЯ ID УСТРОЙСТВА ===
-        function getDeviceId() {
-            let deviceId = localStorage.getItem(DEVICE_KEY);
-            if (!deviceId) {
-                const salt = 'XyZ2026!@#';
-                const components = [
-                    navigator.userAgent,
-                    screen.width + 'x' + screen.height,
-                    navigator.language,
-                    new Date().getTimezoneOffset(),
-                    navigator.hardwareConcurrency || 0,
-                    navigator.deviceMemory || 0
-                ];
-                const raw = components.join('||') + salt;
-                deviceId = btoa(raw).substring(0, 24);
-                localStorage.setItem(DEVICE_KEY, deviceId);
+        function generateChecksum(dateStr, salt) {
+            const raw = dateStr + salt;
+            let hash = 0;
+            for (let i = 0; i < raw.length; i++) {
+                const char = raw.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
             }
-            return deviceId;
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            let temp = Math.abs(hash);
+            for (let i = 0; i < 4; i++) {
+                result = chars[temp % 36] + result;
+                temp = Math.floor(temp / 36);
+            }
+            return result;
         }
 
-        // === ПРОВЕРКА КЛЮЧА ЧЕРЕЗ SUPABASE ===
-        async function isValidKey(key) {
+        function getSaltForDate(dateStr) {
+            const month = parseInt(dateStr.substring(4, 6)) - 1;
+            if (month < 0 || month > 11) return null;
+            return MONTHLY_SALTS[month];
+        }
+
+        function isValidKey(key) {
             if (!key) return false;
-            
-            try {
-                const response = await fetch(VALIDATE_KEY_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ key })
-                });
-                
-                const data = await response.json();
-                
-                if (data.valid) {
-                    if (data.type) {
-                        localStorage.setItem('app_key_type', data.type);
-                    }
-                    return true;
-                } else {
-                    console.log('❌ Ключ невалиден:', data.error);
-                    return false;
-                }
-            } catch (error) {
-                console.error('Ошибка проверки ключа:', error);
-                return false;
+            const parts = key.split('-');
+            if (parts.length !== 3) return false;
+            const prefix = parts[0];
+            if (prefix !== 'MASTER' && prefix !== 'DEMO') return false;
+            const dateStr = parts[1];
+            if (!/^\d{8}$/.test(dateStr)) return false;
+
+            const year = parseInt(dateStr.substring(0, 4));
+            const month = parseInt(dateStr.substring(4, 6));
+            const day = parseInt(dateStr.substring(6, 8));
+            const keyDate = new Date(year, month - 1, day);
+            const now = new Date();
+
+            if (keyDate > now) return false;
+
+            if (prefix === 'DEMO') {
+                const diffHours = (now - keyDate) / (1000 * 60 * 60);
+                if (diffHours > 24) return false;
             }
+
+            if (prefix === 'MASTER') {
+                const diffDays = (now - keyDate) / (1000 * 60 * 60 * 24);
+                if (diffDays > 31) return false;
+            }
+
+            const salt = getSaltForDate(dateStr);
+            if (!salt) return false;
+
+            const expectedChecksum = generateChecksum(dateStr, salt);
+            return parts[2] === expectedChecksum;
         }
 
-        // === ГЛАВНАЯ ФУНКЦИЯ ПРОВЕРКИ ДОСТУПА ===
-        (async function checkAccess() {
-            const savedCode = localStorage.getItem(CODE_KEY);
-            const deviceId = getDeviceId();
+        const savedCode = localStorage.getItem(CODE_KEY);
 
-            // Проверяем сохранённый ключ
-            if (savedCode) {
-                const isValid = await isValidKey(savedCode);
-                if (isValid) {
-                    localStorage.setItem(STORAGE_KEY, 'true');
-                    showApp();
-                    return;
-                } else {
-                    localStorage.removeItem(STORAGE_KEY);
-                    localStorage.removeItem(CODE_KEY);
-                    localStorage.removeItem(EXPIRY_KEY);
-                    localStorage.removeItem('app_key_type');
+        if (savedCode && isValidKey(savedCode)) {
+            localStorage.setItem(STORAGE_KEY, 'true');
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('appContent').style.display = 'block';
+                if (typeof initApp === 'function') {
+                    initApp();
                 }
-            }
-
-            if (localStorage.getItem(STORAGE_KEY) === 'true') {
-                localStorage.removeItem(STORAGE_KEY);
-                localStorage.removeItem(CODE_KEY);
-                localStorage.removeItem(EXPIRY_KEY);
-                localStorage.removeItem('app_key_type');
-            }
-
-            showLoginForm();
-        })();
-
-        // === ПОКАЗАТЬ ПРИЛОЖЕНИЕ ===
-        function showApp() {
-            const loginContainer = document.getElementById('loginContainer');
-            if (loginContainer) {
-                loginContainer.remove();
-            }
-            
-            const appContent = document.getElementById('appContent');
-            if (appContent) {
-                appContent.style.display = 'block';
-            }
-            
-            if (typeof initApp === 'function') {
-                initApp();
-            }
+            });
+            return;
         }
 
-        // === ПОКАЗАТЬ ФОРМУ ВХОДА (ИСПРАВЛЕННАЯ ВЕРСИЯ) ===
-        function showLoginForm() {
-            // СКРЫВАЕМ приложение, а не удаляем!
+        if (localStorage.getItem(STORAGE_KEY) === 'true') {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(CODE_KEY);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
             const appContent = document.getElementById('appContent');
             if (appContent) {
                 appContent.style.display = 'none';
             }
-            
-            // Создаём форму входа поверх всего
+
             const container = document.createElement('div');
             container.id = 'loginContainer';
-            container.className = 'login-container';
+            container.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+                z-index: 9999;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif;
+            `;
+
             container.innerHTML = `
-                <div style="text-align:center; font-size:56px; margin-bottom:8px; animation: pulse 2s ease-in-out infinite;">🚗</div>
-                <div style="text-align:center; font-size:24px; font-weight:700; color:#1a1a2e; margin-bottom:4px;">Автоинструктор Pro</div>
-                <div style="text-align:center; font-size:15px; color:#8e8e93; margin-bottom:24px;">Введите код доступа</div>
-                <div id="loginError" style="background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.3); border-radius:12px; padding:12px 16px; color:#ff3b30; font-size:14px; font-weight:500; margin-bottom:16px; display:none;">❌ Неверный код. Попробуйте снова.</div>
-                <div style="margin-bottom:20px;">
-                    <label style="display:block; font-size:13px; font-weight:600; color:#8e8e93; margin-bottom:6px; letter-spacing:0.3px;">Код доступа</label>
-                    <div style="position:relative; display:flex; align-items:center; background:#f2f2f7; border-radius:14px; border:2px solid transparent; transition:all 0.3s ease;">
-                        <span style="padding:0 14px 0 16px; font-size:18px; opacity:0.5;">🔑</span>
-                        <input type="text" id="codeInput" style="width:100%; padding:16px 0; border:none; background:transparent; font-size:17px; outline:none; font-family:inherit; color:#1a1a2e; letter-spacing:1px; text-transform:uppercase;" placeholder="Введите код" autofocus>
+                <div style="background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); border-radius: 24px; padding: 40px 32px; max-width: 400px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: fadeInUp 0.6s ease;">
+                    <div style="text-align:center; font-size:56px; margin-bottom:8px; animation: pulse 2s ease-in-out infinite;">🚗</div>
+                    <div style="text-align:center; font-size:24px; font-weight:700; color:#1a1a2e; margin-bottom:4px;">Автоинструктор Pro</div>
+                    <div style="text-align:center; font-size:15px; color:#8e8e93; margin-bottom:24px;">Введите код доступа</div>
+                    <div id="loginError" style="background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.3); border-radius:12px; padding:12px 16px; color:#ff3b30; font-size:14px; font-weight:500; margin-bottom:16px; display:none;">❌ Неверный код. Попробуйте снова.</div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:13px; font-weight:600; color:#8e8e93; margin-bottom:6px; letter-spacing:0.3px;">Код доступа</label>
+                        <div style="position:relative; display:flex; align-items:center; background:#f2f2f7; border-radius:14px; border:2px solid transparent; transition:all 0.3s ease;">
+                            <span style="padding:0 14px 0 16px; font-size:18px; opacity:0.5;">🔑</span>
+                            <input type="text" id="codeInput" style="width:100%; padding:16px 0; border:none; background:transparent; font-size:17px; outline:none; font-family:inherit; color:#1a1a2e; letter-spacing:1px; text-transform:uppercase;" placeholder="Введите код" autofocus>
+                        </div>
                     </div>
+                    <button id="loginBtn" style="width:100%; padding:18px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none; border-radius:14px; font-size:17px; font-weight:600; cursor:pointer; transition:all 0.3s ease; box-shadow:0 4px 15px rgba(102,126,234,0.4); margin-top:4px; min-height:56px;">Активировать доступ</button>
+                    <div id="attemptsInfo" style="text-align:center; font-size:13px; color:#8e8e93; margin-top:16px; opacity:0.7;"></div>
+                    <div style="text-align:center; font-size:13px; color:#8e8e93; margin-top:12px; padding:12px; background:rgba(102,126,234,0.05); border-radius:12px; border:1px dashed rgba(102,126,234,0.2);">
+                        💡 Код выдаётся администратором<br>
+                        <strong style="color:#667eea;">MASTER-</strong> — вечный доступ<br>
+                        <strong style="color:#667eea;">DEMO-</strong> — доступ на 24 часа
+                    </div>
+                    <div id="keyTypeHint" style="text-align:center; font-size:12px; color:#8e8e93; margin-top:8px; opacity:0.6;"></div>
+                    <div style="text-align:center; margin-top:20px; font-size:13px; color:#aeaeb2;">Доступ только для <span style="color:#667eea; font-weight:600;">авторизованных</span></div>
+                    <style>
+                        @keyframes fadeInUp {
+                            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+                            to { opacity: 1; transform: translateY(0) scale(1); }
+                        }
+                        @keyframes shake {
+                            0%, 100% { transform: translateX(0); }
+                            25% { transform: translateX(-8px); }
+                            75% { transform: translateX(8px); }
+                        }
+                        @keyframes pulse {
+                            0%, 100% { transform: scale(1); }
+                            50% { transform: scale(1.05); }
+                        }
+                        #loginContainer input:focus {
+                            border-color: #667eea;
+                            background: #ffffff;
+                            box-shadow: 0 0 0 4px rgba(102,126,234,0.15);
+                        }
+                        @media (max-width: 480px) {
+                            #loginContainer div[style*="padding: 40px 32px;"] { padding: 32px 24px; }
+                        }
+                        @media (prefers-color-scheme: dark) {
+                            #loginContainer div[style*="background: rgba(255,255,255,0.95);"] { background: rgba(44,44,46,0.95); }
+                            #loginContainer input { color: #ffffff; }
+                            #loginContainer input::placeholder { color: #636366; }
+                        }
+                    </style>
                 </div>
-                <button id="loginBtn" style="width:100%; padding:18px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none; border-radius:14px; font-size:17px; font-weight:600; cursor:pointer; transition:all 0.3s ease; box-shadow:0 4px 15px rgba(102,126,234,0.4); margin-top:4px; min-height:56px;">Активировать доступ</button>
-                <div id="attemptsInfo" style="text-align:center; font-size:13px; color:#8e8e93; margin-top:16px; opacity:0.7;"></div>
-                <div style="text-align:center; font-size:13px; color:#8e8e93; margin-top:12px; padding:12px; background:rgba(102,126,234,0.05); border-radius:12px; border:1px dashed rgba(102,126,234,0.2);">
-                    💡 Код выдаётся администратором<br>
-                    <strong style="color:#667eea;">MASTER-</strong> — вечный доступ<br>
-                    <strong style="color:#667eea;">DEMO-</strong> — доступ на 24 часа
-                </div>
-                <div id="keyTypeHint" style="text-align:center; font-size:12px; color:#8e8e93; margin-top:8px; opacity:0.6;"></div>
-                <div style="text-align:center; margin-top:20px; font-size:13px; color:#aeaeb2;">Доступ только для <span style="color:#667eea; font-weight:600;">авторизованных</span></div>
-                <style>
-                    .login-container {
-                        background: rgba(255,255,255,0.95);
-                        backdrop-filter: blur(20px);
-                        border-radius: 24px;
-                        padding: 40px 32px;
-                        max-width: 400px;
-                        width: calc(100% - 32px);
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                        animation: fadeInUp 0.6s ease;
-                        position: fixed;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        z-index: 9999;
-                    }
-                    @keyframes fadeInUp {
-                        from { opacity: 0; transform: translate(-50%, -40%) scale(0.95); }
-                        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-                    }
-                    @keyframes shake {
-                        0%, 100% { transform: translate(-50%, -50%) translateX(0); }
-                        25% { transform: translate(-50%, -50%) translateX(-8px); }
-                        75% { transform: translate(-50%, -50%) translateX(8px); }
-                    }
-                    @keyframes pulse {
-                        0%, 100% { transform: scale(1); }
-                        50% { transform: scale(1.05); }
-                    }
-                    .login-container input:focus {
-                        border-color: #667eea;
-                        background: #ffffff;
-                        box-shadow: 0 0 0 4px rgba(102,126,234,0.15);
-                    }
-                    @media (max-width: 480px) {
-                        .login-container { padding: 32px 24px; }
-                    }
-                    @media (prefers-color-scheme: dark) {
-                        .login-container { background: rgba(44,44,46,0.95); }
-                        .login-container input { color: #ffffff; }
-                        .login-container input::placeholder { color: #636366; }
-                    }
-                </style>
             `;
 
             document.body.appendChild(container);
 
-            // === ЛОГИКА РАБОТЫ ФОРМЫ ===
             const input = document.getElementById('codeInput');
             const btn = document.getElementById('loginBtn');
             const error = document.getElementById('loginError');
@@ -237,7 +218,7 @@
                 }
             }
 
-            async function tryLogin() {
+            function tryLogin() {
                 const code = input.value.trim().toUpperCase();
 
                 if (!code) {
@@ -251,15 +232,7 @@
                     return;
                 }
 
-                btn.disabled = true;
-                btn.textContent = '⏳ Проверка...';
-
-                const isValid = await isValidKey(code);
-
-                btn.disabled = false;
-                btn.textContent = 'Активировать доступ';
-
-                if (isValid) {
+                if (isValidKey(code)) {
                     localStorage.setItem(CODE_KEY, code);
                     localStorage.setItem(STORAGE_KEY, 'true');
 
@@ -274,12 +247,7 @@
                     error.style.display = 'block';
 
                     setTimeout(() => {
-                        const containerEl = document.getElementById('loginContainer');
-                        if (containerEl) {
-                            containerEl.style.transition = 'all 0.4s ease';
-                            containerEl.style.opacity = '0';
-                        }
-                        setTimeout(() => location.reload(), 400);
+                        location.reload();
                     }, 1000);
                 } else {
                     attempts++;
@@ -301,7 +269,7 @@
 
             setTimeout(() => input.focus(), 300);
             updateAttempts();
-        }
+        });
     })();
     </script>
     <!-- ========== КОНЕЦ СИСТЕМЫ ДОСТУПА ========== -->
@@ -2051,6 +2019,7 @@
                 });
             }
 
+            // ===== ВСЕ ФУНКЦИИ ПРИЛОЖЕНИЯ =====
             function toggleTheme() {
                 darkTheme = !darkTheme;
                 localStorage.setItem('driving_theme', darkTheme ? 'dark' : 'light');
@@ -3108,10 +3077,24 @@
                     }
                 }, { passive: true });
             }
+
+            // ===== СБРОС ДОСТУПА =====
+            window.resetAccess = function() {
+                if (confirm('Сбросить авторизацию? Будет запрошен ключ доступа.')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            };
         </script>
     </div>
     <!-- ===== КОНЕЦ ОСНОВНОГО КОНТЕНТА ===== -->
 
+    <!-- ===== КНОПКА СБРОСА ДОСТУПА ===== -->
+    <div style="position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 9999; opacity: 0.35;">
+        <button onclick="resetAccess()" style="padding: 8px 20px; background: #ff3b30; color: white; border: none; border-radius: 10px; font-size: 12px; cursor: pointer; box-shadow: 0 4px 15px rgba(255,59,48,0.3); font-weight: 600;">
+            🚪 Сбросить доступ
+        </button>
+    </div>
+
 </body>
 </html>
-
