@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Генератор ключей</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px 32px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.6s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .header-icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+        .header-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .header-subtitle {
+            font-size: 14px;
+            color: #8e8e93;
+            margin-top: 4px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8e8e93;
+            margin-bottom: 6px;
+            display: block;
+            letter-spacing: 0.3px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 12px;
+            font-size: 16px;
+            outline: none;
+            background: #f2f2f7;
+            color: #1a1a2e;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .form-input:focus {
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+        .form-input:disabled {
+            opacity: 0.6;
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 56px;
+        }
+        .btn:active {
+            transform: scale(0.97);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            transform: scale(0.97);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:active {
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #34c759 0%, #28a745 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(52, 199, 89, 0.4);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ff3b30 0%, #dc3545 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 59, 48, 0.4);
+        }
+        .btn-outline {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+        }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+        }
+        .btn-row .btn {
+            flex: 1;
+        }
+        .key-display {
+            background: #f2f2f7;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 2px dashed rgba(102, 126, 234, 0.2);
+            transition: all 0.3s ease;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .key-display.has-key {
+            border-color: #34c759;
+            background: rgba(52, 199, 89, 0.05);
+        }
+        .key-display.master-key {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        .key-value {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #1a1a2e;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .key-info {
+            font-size: 13px;
+            color: #8e8e93;
+            margin-top: 8px;
+        }
+        .key-expiry {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .key-expiry.master {
+            color: #667eea;
+        }
+        .key-expiry.demo {
+            color: #34c759;
+        }
+        .error {
+            color: #ff3b30;
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            display: none;
+            padding: 12px;
+            background: rgba(255, 59, 48, 0.1);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 59, 48, 0.2);
+        }
+        .error.show {
+            display: block;
+            animation: shake 0.4s ease;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .admin-link {
+            margin-top: 16px;
+            text-align: center;
+            font-size: 13px;
+            color: #8e8e93;
+            padding: 12px;
+            background: rgba(255, 149, 0, 0.05);
+            border-radius: 12px;
+            border: 1px dashed rgba(255, 149, 0, 0.2);
+        }
+        .admin-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .admin-link a:hover {
+            text-decoration: underline;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s ease-in-out infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .month-info {
+            text-align: center;
+            font-size: 13px;
+            color: #8e8e93;
+            margin-bottom: 16px;
+            padding: 8px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 10px;
+        }
+        .month-info strong {
+            color: #667eea;
+        }
+        .history {
+            margin-top: 20px;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            padding-top: 16px;
+        }
+        .history-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8e8e93;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-clear {
+            background: none;
+            border: none;
+            color: #ff3b30;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 8px;
+            background: rgba(255, 59, 48, 0.1);
+            transition: all 0.3s ease;
+        }
+        .history-clear:active {
+            transform: scale(0.95);
+        }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: #f2f2f7;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .history-item .code {
+            font-family: monospace;
+            font-weight: 600;
+            color: #1a1a2e;
+            letter-spacing: 1px;
+            font-size: 13px;
+            word-break: break-all;
+        }
+        .history-item .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 10px;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+        .badge.master {
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+        }
+        .badge.demo {
+            background: rgba(52, 199, 89, 0.15);
+            color: #34c759;
+        }
+        .badge.expired {
+            background: rgba(255, 59, 48, 0.1);
+            color: #ff3b30;
+        }
+        .badge.active {
+            background: rgba(52, 199, 89, 0.15);
+            color: #34c759;
+        }
+        .history-item .date {
+            font-size: 11px;
+            color: #8e8e93;
+            white-space: nowrap;
+        }
+        .history-item .right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .empty-state {
+            text-align: center;
+            color: #aeaeb2;
+            padding: 20px;
+            font-size: 14px;
+        }
+        .type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .type-option {
+            padding: 14px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--premium-card, #ffffff);
+            color: #8e8e93;
+            font-weight: 600;
+            font-size: 15px;
+            min-height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .type-option.active {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15);
+        }
+        .type-option.master.active {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+        .type-option.demo.active {
+            border-color: #34c759;
+            background: rgba(52, 199, 89, 0.1);
+            color: #34c759;
+        }
+        .type-option:active {
+            transform: scale(0.97);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 24px 16px;
+            }
+            .key-value {
+                font-size: 20px;
+            }
+            .btn-row {
+                flex-direction: column;
+            }
+            .type-selector {
+                grid-template-columns: 1fr;
+            }
+            .history-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .history-item .right {
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+        @media (prefers-color-scheme: dark) {
+            .container {
+                background: rgba(44, 44, 46, 0.95);
+            }
+            .header-title {
+                color: #ffffff;
+            }
+            .key-value {
+                color: #ffffff;
+            }
+            .key-display {
+                background: #2c2c2e;
+            }
+            .form-input {
+                background: #2c2c2e;
+                color: #ffffff;
+            }
+            .form-input:focus {
+                background: #3a3a3c;
+            }
+            .history-item {
+                background: #2c2c2e;
+            }
+            .history-item .code {
+                color: #ffffff;
+            }
+            .month-info {
+                background: rgba(102, 126, 234, 0.1);
+            }
+            .type-option {
+                background: #2c2c2e;
+                color: #aeaeb2;
+            }
+            .type-option.active {
+                background: rgba(102, 126, 234, 0.2);
+            }
+            .type-option.demo.active {
+                background: rgba(52, 199, 89, 0.2);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-icon">🔑</div>
+            <div class="header-title">Генератор ключей</div>
+            <div class="header-subtitle">Создавайте одноразовые ключи для инструкторов</div>
+        </div>
+
+        <div class="month-info">
+            📅 Текущая соль: <strong id="currentSaltDisplay">загрузка...</strong>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Тип ключа</label>
+            <div class="type-selector">
+                <div class="type-option demo active" data-type="DEMO" onclick="selectType('DEMO', this)">
+                    ⏰ Демо (24 часа)
+                </div>
+                <div class="type-option master" data-type="MASTER" onclick="selectType('MASTER', this)">
+                    👑 Мастер (вечный)
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Пароль администратора</label>
+            <input type="password" id="adminPassword" class="form-input" placeholder="Введите пароль" autocomplete="current-password">
+        </div>
+
+        <button class="btn btn-primary" id="generateBtn" onclick="generateKey()">
+            🔑 Создать ключ
+        </button>
+
+        <div class="key-display" id="keyDisplay">
+            <div class="key-value" id="keyValue">—</div>
+            <div class="key-info" id="keyInfo">Нажмите «Создать ключ»</div>
+            <div class="key-expiry" id="keyExpiry"></div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-success" id="copyBtn" onclick="copyKey()" disabled>📋 Копировать</button>
+            <button class="btn btn-outline" onclick="clearKey()">🗑️ Очистить</button>
+        </div>
+
+        <div class="error" id="errorMessage"></div>
+
+        <div class="history">
+            <div class="history-title">
+                📜 История ключей
+                <button class="history-clear" onclick="clearHistory()">🗑️ Очистить всё</button>
+            </div>
+            <div id="historyList"></div>
+        </div>
+
+        <div class="admin-link">
+            🔐 Основное приложение: <a href="./" target="_blank">перейти</a>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">✅ Ключ скопирован!</div>
+
+    <script>
+        // ========== НАСТРОЙКИ ==========
+        const GENERATE_URL = 'https://knnmjukotzfhoruvzuvp.supabase.co/functions/v1/generate-key';
+        const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+        const STORAGE_KEY = 'generated_keys_history';
+
+        let currentKey = null;
+        let selectedType = 'DEMO';
+        let currentSalt = null;
+
+        // ========== ИНИЦИАЛИЗАЦИЯ ==========
+        function init() {
+            const now = new Date();
+            const monthName = MONTHS[now.getMonth()];
+            const year = now.getFullYear();
+            document.getElementById('currentSaltDisplay').textContent = `${monthName} ${year}`;
+            renderHistory();
+        }
+
+        // ========== ВЫБОР ТИПА ==========
+        function selectType(type, el) {
+            selectedType = type;
+            document.querySelectorAll('.type-option').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        // ========== ГЕНЕРАЦИЯ КЛЮЧА ==========
+        async function generateKey() {
+            const password = document.getElementById('adminPassword').value.trim();
+
+            if (!password) {
+                showError('❌ Введите пароль администратора');
+                document.getElementById('adminPassword').focus();
+                return;
+            }
+
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading-spinner"></span> Генерация...';
+
+            try {
+                const response = await fetch(GENERATE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        type: selectedType, 
+                        password: password 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.status === 401 || data.error) {
+                    showError(data.error || '❌ Ошибка авторизации. Неверный пароль.');
+                    return;
+                }
+
+                if (data.key) {
+                    currentKey = data.key;
+                    displayKey(data);
+                    saveToHistory(data);
+                    showToast('✅ Ключ создан!');
+                } else {
+                    showError('❌ Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+
+            } catch (error) {
+                console.error('Ошибка:', error);
+                showError('❌ Ошибка соединения: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🔑 Создать ключ';
+            }
+        }
+
+        // ========== ОТОБРАЖЕНИЕ КЛЮЧА ==========
+        function displayKey(data) {
+            const keyDisplay = document.getElementById('keyDisplay');
+            const keyValue = document.getElementById('keyValue');
+            const keyInfo = document.getElementById('keyInfo');
+            const keyExpiry = document.getElementById('keyExpiry');
+            const copyBtn = document.getElementById('copyBtn');
+
+            keyValue.textContent = data.key;
+            keyInfo.textContent = `✅ ${data.type === 'MASTER' ? 'Мастер' : 'Демо'}-ключ создан`;
+            
+            if (data.type === 'MASTER') {
+                keyExpiry.textContent = '👑 Вечный доступ';
+                keyExpiry.className = 'key-expiry master';
+                keyDisplay.className = 'key-display has-key master-key';
+            } else {
+                keyExpiry.textContent = '⏰ Действует 24 часа';
+                keyExpiry.className = 'key-expiry demo';
+                keyDisplay.className = 'key-display has-key';
+            }
+
+            copyBtn.disabled = false;
+            document.getElementById('errorMessage').classList.remove('show');
+        }
+
+        // ========== СОХРАНЕНИЕ В ИСТОРИЮ ==========
+        function saveToHistory(data) {
+            const history = getHistory();
+            history.push({
+                key: data.key,
+                type: data.type,
+                createdAt: new Date().toISOString(),
+                expiresIn: data.expiresIn || (data.type === 'MASTER' ? 'вечно' : '24 часа')
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            renderHistory();
+        }
+
+        function getHistory() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            } catch {
+                return [];
+            }
+        }
+
+        function renderHistory() {
+            const history = getHistory();
+            const container = document.getElementById('historyList');
+
+            if (history.length === 0) {
+                container.innerHTML = '<div class="empty-state">Нет созданных ключей</div>';
+                return;
+            }
+
+            const sorted = history.slice().reverse().slice(0, 50);
+
+            let html = '';
+            sorted.forEach(item => {
+                const date = new Date(item.createdAt);
+                const dateStr = date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const badgeClass = item.type === 'MASTER' ? 'master' : 'demo';
+                const badgeText = item.type === 'MASTER' ? '👑 Master' : '⏰ Demo';
+
+                html += `
+                    <div class="history-item">
+                        <span class="code">${item.key}</span>
+                        <div class="right">
+                            <span class="badge ${badgeClass}">${badgeText}</span>
+                            <span class="date">${dateStr}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function clearHistory() {
+            if (confirm('Удалить всю историю ключей?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                renderHistory();
+                showToast('🗑️ История очищена');
+            }
+        }
+
+        // ========== КОПИРОВАНИЕ ==========
+        function copyKey() {
+            if (!currentKey) return;
+
+            navigator.clipboard.writeText(currentKey).then(() => {
+                showToast('✅ Ключ скопирован!');
+            }).catch(() => {
+                // fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = currentKey;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showToast('✅ Ключ скопирован!');
+            });
+        }
+
+        // ========== ОЧИСТКА ==========
+        function clearKey() {
+            currentKey = null;
+            document.getElementById('keyValue').textContent = '—';
+            document.getElementById('keyInfo').textContent = 'Нажмите «Создать ключ»';
+            document.getElementById('keyExpiry').textContent = '';
+            document.getElementById('keyDisplay').className = 'key-display';
+            document.getElementById('copyBtn').disabled = true;
+            showToast('🗑️ Ключ очищен');
+        }
+
+        // ========== ОШИБКИ И УВЕДОМЛЕНИЯ ==========
+        function showError(text) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = text;
+            errorEl.classList.add('show');
+            setTimeout(() => errorEl.classList.remove('show'), 5000);
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // ========== HOTKEYS ==========
+        document.getElementById('adminPassword').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                generateKey();
+            }
+        });
+
+        // ========== ЗАПУСК ==========
+        init();
+    </script>
+</body>
+</html>
